@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+<meta charset="UTF-8">
+<title>بازی حدس عدد خفن 🎯</title>
+<style>
+    body {
+        font-family: 'Tahoma', sans-serif;
+        background: linear-gradient(45deg, #ffecd2, #fcb69f);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+        flex-direction: column;
+        text-align: center;
+        transition: background 2s linear;
+        overflow: hidden;
+    }
+    h1 {
+        font-size: 3em;
+        color: #ff6f61;
+        text-shadow: 2px 2px #fff;
+        margin-bottom: 20px;
+    }
+    input[type=number] {
+        padding: 10px;
+        font-size: 1.2em;
+        border-radius: 10px;
+        border: 2px solid #ff6f61;
+        width: 100px;
+        text-align: center;
+        transition: transform 0.2s;
+    }
+    button {
+        padding: 10px 20px;
+        font-size: 1.2em;
+        margin-left: 10px;
+        border-radius: 10px;
+        border: none;
+        background-color: #ff6f61;
+        color: white;
+        cursor: pointer;
+        transition: transform 0.2s, background 0.3s;
+    }
+    button:hover {
+        transform: scale(1.1);
+        background-color: #ff3b2e;
+    }
+    p {
+        font-size: 1.5em;
+        margin-top: 20px;
+        color: #333;
+        min-height: 30px;
+        transition: all 0.3s ease;
+    }
+    .success {
+        color: green;
+        font-weight: bold;
+        animation: pop 0.5s ease;
+    }
+    .shake {
+        animation: shake 0.3s;
+    }
+    @keyframes pop {
+        0% { transform: scale(0.5); }
+        100% { transform: scale(1); }
+    }
+    @keyframes shake {
+        0% { transform: translateX(0); }
+        25% { transform: translateX(-10px); }
+        50% { transform: translateX(10px); }
+        75% { transform: translateX(-10px); }
+        100% { transform: translateX(0); }
+    }
+    canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        pointer-events: none;
+    }
+</style>
+</head>
+<body>
+
+<h1>🎯 بازی حدس عدد خفن</h1>
+<p>یک عدد بین 1 تا 100 حدس بزن:</p>
+<input type="number" id="guess" min="1" max="100">
+<button onclick="checkGuess()">حدس بزن</button>
+<button onclick="resetGame()">شروع دوباره 🔄</button>
+<p id="feedback"></p>
+<p>تعداد تلاش‌ها: <span id="attempts">0</span></p>
+<p>زمان باقی‌مانده: <span id="timer">30</span> ثانیه</p>
+
+<!-- آهنگ پس‌زمینه -->
+<audio id="bgMusic" src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" loop></audio>
+<!-- افکت‌ها -->
+<audio id="successSound" src="https://www.soundjay.com/buttons/sounds/button-3.mp3"></audio>
+<audio id="failSound" src="https://www.soundjay.com/buttons/sounds/button-10.mp3"></audio>
+
+<canvas id="confetti"></canvas>
+
+<script>
+    let numberToGuess, attempts, timeLeft, timerInterval;
+    const canvas = document.getElementById('confetti');
+    const ctx = canvas.getContext('2d');
+    let confettiParticles = [];
+
+    function startGame() {
+        numberToGuess = Math.floor(Math.random() * 100) + 1;
+        attempts = 0;
+        timeLeft = 30;
+        document.getElementById('attempts').textContent = attempts;
+        document.getElementById('feedback').textContent = '';
+        document.getElementById('guess').value = '';
+        document.getElementById('timer').textContent = timeLeft;
+        document.body.style.background = 'linear-gradient(45deg, #ffecd2, #fcb69f)';
+
+        // پخش موسیقی پس‌زمینه
+        const music = document.getElementById('bgMusic');
+        music.volume = 0.3;
+        music.play().catch(() => {});
+
+        startTimer();
+    }
+
+    function startTimer() {
+        clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            document.getElementById('timer').textContent = timeLeft;
+            if(timeLeft <= 0) {
+                clearInterval(timerInterval);
+                document.getElementById('feedback').textContent = `زمان تمام شد! عدد درست ${numberToGuess} بود.`;
+                document.getElementById('feedback').className = '';
+            }
+        }, 1000);
+    }
+
+    function checkGuess() {
+        const guessInput = document.getElementById('guess');
+        const guess = parseInt(guessInput.value);
+        const feedback = document.getElementById('feedback');
+        attempts++;
+        document.getElementById('attempts').textContent = attempts;
+
+        if (!guess || guess < 1 || guess > 100) {
+            feedback.textContent = "لطفا یک عدد معتبر بین 1 تا 100 وارد کن!";
+            feedback.className = '';
+            return;
+        }
+
+        if (guess === numberToGuess) {
+            feedback.textContent = `تبریک! 🎉 عدد درست بود. تعداد تلاش‌ها: ${attempts}`;
+            feedback.className = 'success';
+            document.getElementById('successSound').play();
+            createConfetti();
+            clearInterval(timerInterval);
+        } else {
+            feedback.textContent = guess < numberToGuess ? "عدد بزرگتر است." : "عدد کوچکتر است.";
+            feedback.className = 'shake';
+            guessInput.classList.add('shake');
+            document.getElementById('failSound').play();
+            setTimeout(() => guessInput.classList.remove('shake'), 300);
+        }
+    }
+
+    function resetGame() {
+        confettiParticles = [];
+        startGame();
+    }
+
+    // --- Confetti Effect ---
+    function createConfetti() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        for (let i=0; i<150; i++) {
+            confettiParticles.push({
+                x: Math.random()*canvas.width,
+                y: Math.random()*canvas.height - canvas.height,
+                r: Math.random()*6 + 4,
+                d: Math.random()*10 + 5,
+                color: `hsl(${Math.random()*360}, 100%, 50%)`,
+                tilt: Math.random()*10 - 10,
+                tiltAngleIncrement: Math.random() * 0.07 + 0.05
+            });
+        }
+        requestAnimationFrame(drawConfetti);
+    }
+
+    function drawConfetti() {
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        confettiParticles.forEach((p, i) => {
+            ctx.beginPath();
+            ctx.lineWidth = p.r/2;
+            ctx.strokeStyle = p.color;
+            ctx.moveTo(p.x + p.tilt + p.r/2, p.y);
+            ctx.lineTo(p.x + p.tilt, p.y + p.tilt + p.r/2);
+            ctx.stroke();
+            p.tilt += p.tiltAngleIncrement;
+            p.y += (Math.cos(p.d) + 3 + p.r/2)/2;
+            if(p.y > canvas.height) confettiParticles.splice(i,1);
+        });
+        if(confettiParticles.length > 0) requestAnimationFrame(drawConfetti);
+    }
+
+    window.onload = startGame;
+    window.onresize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+</script>
+
+</body>
+</html>
