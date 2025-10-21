@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>بازی ماشین خفن — با رکورد و شتاب‌سنج</title>
+<style>
+  :root{
+    --accent:#ff6f61;
+    --bg1:#071025;
+    --road:#222831;
+    --lane:#e6e6e6;
+    --hud:#ffffffdd;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:linear-gradient(180deg,#08102a,#03111b);font-family:Tahoma,Arial;color:var(--hud);display:flex;align-items:center;justify-content:center;padding:18px}
+  .wrap{width:360px;max-width:96vw;background:linear-gradient(180deg,#071427,#021021);border-radius:14px;padding:12px;box-shadow:0 12px 40px rgba(0,0,0,0.6);position:relative;overflow:hidden}
+  header{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  header h1{font-size:1.05rem;margin:0}
+  .hud{display:flex;justify-content:space-between;align-items:center;margin:8px 0;font-size:0.9rem}
+  .btn{background:var(--accent);color:#fff;padding:8px 10px;border-radius:8px;border:none;cursor:pointer;font-weight:700}
+  .small{font-size:0.85rem;color:#cbd5e1}
+  canvas{display:block;border-radius:10px;width:100%;background:linear-gradient(180deg,#0b1b2b,#00121a);touch-action:none}
+  .controls{display:flex;justify-content:center;gap:8px;margin-top:8px}
+  .touch-btn{width:64px;height:44px;border-radius:10px;background:#15202a;border:1px solid #25343d;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;user-select:none}
+  .row{display:flex;gap:8px;align-items:center}
+  .leaderboard{position:absolute;left:12px;right:12px;top:12px;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);padding:10px;border-radius:8px;display:none;z-index:40}
+  .lb-list{max-height:180px;overflow:auto;margin-top:8px}
+  .lb-row{display:flex;justify-content:space-between;padding:6px 8px;border-bottom:1px dashed #ffffff22}
+  .muted{opacity:0.5}
+  .footer-note{text-align:center;color:#98a8b8;font-size:0.8rem;margin-top:8px}
+  @media(min-width:700px){.wrap{width:480px}}
+</style>
+</head>
+<body>
+  <div class="wrap" role="application" aria-label="بازی ماشین خفن">
+    <header>
+      <h1>🏁 بازی ماشین خفن</h1>
+      <div class="row">
+        <button id="playMusicBtn" class="btn small">▶︎ پخش موسیقی</button>
+        <button id="muteBtn" class="btn small">🔊</button>
+      </div>
+    </header>
+
+    <div class="hud">
+      <div>نمره: <strong id="score">0</strong></div>
+      <div class="small">سرعت: <strong id="speed">1.00</strong></div>
+      <div class="small">زمان: <strong id="time">0s</strong></div>
+    </div>
+
+    <canvas id="game" width="360" height="640" aria-label="صفحه بازی"></canvas>
+
+    <div class="controls" id="touchControls" style="display:none">
+      <div class="touch-btn" id="leftBtn">◀</div>
+      <div class="touch-btn" id="rightBtn">▶</div>
+    </div>
+
+    <div style="display:flex;gap:8px;justify-content:space-between;margin-top:10px">
+      <button id="restartBtn" class="btn">🔄 شروع دوباره</button>
+      <button id="showLB" class="btn">🏆 جدول رکورد</button>
+    </div>
+
+    <div class="leaderboard" id="leaderboard" aria-hidden="true">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <strong>جدول بهترین‌ها</strong>
+        <div>
+          <button id="closeLB" class="btn small">بستن</button>
+          <button id="clearLB" class="btn small">پاک کردن</button>
+        </div>
+      </div>
+      <div class="lb-list" id="lbList"></div>
+      <div style="margin-top:8px;display:flex;gap:8px">
+        <input id="playerName" placeholder="نام شما" style="flex:1;padding:8px;border-radius:6px;border:1px solid #2a3a45;background:transparent;color:#fff" />
+        <button id="saveScore" class="btn small">ثبت نمره</button>
+      </div>
+    </div>
+
+    <div class="footer-note small">از ← و → برای حرکت استفاده کن — در موبایل می‌تونی کج‌کردن گوشی (tilt) رو هم امتحان کنی</div>
+  </div>
+
+<script>
+/* ----------------------- تنظیمات و متغیرها ----------------------- */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let W = canvas.width, H = canvas.height;
+
+function fitCanvas(){
+  // حفظ نسبت و وضوح مناسب
+  const maxW = Math.min(720, Math.floor(window.innerWidth * 0.92));
+  const ratio = 2; // برای وضوح بیشتر در صفحه‌های با DPR بالا
+  const displayW = Math.min(maxW, 480);
+  const displayH = Math.floor(displayW * (H / W));
+  canvas.style.width = displayW + 'px';
+  canvas.style.height = displayH + 'px';
+  canvas.width = displayW * ratio;
+  canvas.height = displayH * ratio;
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.scale(ratio, ratio);
+}
+window.addEventListener('resize', fitCanvas);
+fitCanvas();
+
+/* عناصر UI */
+const scoreEl = document.getElementById('score');
+const speedEl = document.getElementById('speed');
+const timeEl = document.getElementById('time');
+const restartBtn = document.getElementById('restartBtn');
+const playMusicBtn = document.getElementById('playMusicBtn');
+const muteBtn = document.getElementById('muteBtn');
+const leftBtn = document.getElementById('leftBtn');
+const rightBtn = document.getElementById('rightBtn');
+const touchControls = document.getElementById('touchControls');
+const lbModal = document.getElementById('leaderboard');
+const showLB = document.getElementById('showLB');
+const closeLB = document.getElementById('closeLB');
+const lbList = document.getElementById('lbList');
+const clearLB = document.getElementById('clearLB');
+const playerNameInput = document.getElementById('playerName');
+const saveScoreBtn = document.getElementById('saveScore');
+
+/* صدا و موسیقی */
+const bgMusic = new Audio('https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3');
+bgMusic.loop = true; bgMusic.volume = 0.28;
+const crashSfx = new Audio('https://www.soundjay.com/transportation/sounds/car-crash-2.mp3');
+const passSfx = new Audio('https://www.soundjay.com/buttons/sounds/button-16.mp3');
+let isMuted = false;
+
+/* داده بازی */
+let player, obstacles, keys, score, speedMult, startTime, elapsed, gameOver, lastFrame;
+let tiltAvailable = false;
+
+/* ----------------------- اشکال SVG برای ماشین (رندر به صورت تصویر داخلی) ----------------------- */
+const carSVG = `<svg xmlns='http://www.w3.org/2000/svg' width='120' height='220' viewBox='0 0 120 220'>
+  <defs><linearGradient id='g' x1='0' x2='1'><stop offset='0' stop-color='#ff7a69'/><stop offset='1' stop-color='#ff4b3a'/></linearGradient></defs>
+  <rect rx='12' ry='12' x='10' y='40' width='100' height='120' fill='url(#g)'/>
+  <rect x='28' y='54' width='64' height='40' rx='6' fill='#ffffff88' />
+  <rect x='26' y='110' width='68' height='14' fill='#222'/>
+  <circle cx='30' cy='170' r='10' fill='#111'/>
+  <circle cx='90' cy='170' r='10' fill='#111'/>
+</svg>`;
+const carImg = new Image();
+carImg.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(carSVG);
+
+/* ----------------------- توابع اولیه و شروع بازی ----------------------- */
+function init(){
+  W = canvas.width/2; H = canvas.height/2; // در رسم از مقیاس 1 استفاده می‌کنیم (canvas اندازه فیزیکی بزرگ شده)
+  player = {w:54, h:100, x: (W-54)/2, y: H - 140, speedX:0, maxSpeedX:7, color:'#ff6f61', invuln:0};
+  obstacles = [];
+  keys = {left:false, right:false};
+  score = 0;
+  speedMult = 1;
+  startTime = performance.now();
+  elapsed = 0;
+  gameOver = false;
+  lastFrame = performance.now();
+  spawnTimer = 0;
+  // try autoplay music (catch errors silently)
+  bgMusic.play().catch(()=>{/* user interaction required */});
+  updateUI();
+}
+
+/* ----------------------- منطق موانع و فیزیک (حس pseudo-3D: scale با y) ----------------------- */
+let spawnTimer = 0;
+function spawnObstacle(){
+  // لِینای جاده (3 لِین)
+  const roadPad = 36;
+  const roadW = (W - roadPad*2);
+  const laneCount = 3;
+  const laneW = roadW / laneCount;
+  const lane = Math.floor(Math.random()*laneCount);
+  const w = 34 + Math.random()*44;
+  const h = 26 + Math.random()*28;
+  const x = roadPad + lane*laneW + (laneW - w)/2 + (Math.random()*10 -5);
+  const y = -h - 20;
+  const baseSpeed = 1.6 + Math.random()*0.8;
+  obstacles.push({x,y,w,h,baseSpeed, color: randomColor(), passed:false});
+}
+function randomColor(){
+  const c = ['#ffd166','#06d6a0','#118ab2','#ef476f','#ffd54f','#9b5de5'];
+  return c[Math.floor(Math.random()*c.length)];
+}
+
+/* ----------------------- رسم جاده، بازیکن، موانع ----------------------- */
+function drawRoad(){
+  const roadPad = 36;
+  const roadW = (W - roadPad*2);
+  // grass
+  ctx.fillStyle = '#06202a';
+  ctx.fillRect(0,0,W,H);
+  // road base
+  roundRect(ctx, roadPad, 0, roadW, H, 18, true, false, '#202426');
+  // dashed center lines
+  const laneCount = 3, laneW = roadW/laneCount;
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = '#ffffff22';
+  ctx.setLineDash([18,20]);
+  for(let i=1;i<laneCount;i++){
+    const x = roadPad + i*laneW;
+    ctx.beginPath(); ctx.moveTo(x,20); ctx.lineTo(x, H-20); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  // side markings
+  ctx.fillStyle = '#00000066';
+  ctx.fillRect(roadPad-8,0,8,H);
+  ctx.fillRect(roadPad+roadW,0,8,H);
+}
+
+function drawPlayer(){
+  // سایه
+  ctx.save();
+  ctx.globalAlpha = 0.18;
+  ctx.fillStyle = '#000';
+  roundRect(ctx, player.x+6, player.y+player.h-8, player.w-6, 12, 6, true, false, '#000');
+  ctx.restore();
+
+  // تصویر ماشین (centered)
+  ctx.drawImage(carImg, player.x, player.y, player.w, player.h);
+}
+
+function drawObstacles(){
+  obstacles.forEach(o=>{
+    // برای حس عمق اندازه را بر اساس y تغییر می‌دهیم (هرچه پایین‌تر، بزرگ‌تر)
+    const depth = 1 + (o.y / H) * 0.9; // از ~1 تا ~1.9
+    const ow = o.w * depth;
+    const oh = o.h * depth;
+    const ox = o.x - (ow - o.w)/2;
+    const oy = o.y - (oh - o.h)/2;
+    // بدنه
+    roundRect(ctx, ox, oy, ow, oh, 8, true, false, o.color);
+    // جزئیات
+    ctx.fillStyle = '#0003';
+    ctx.fillRect(ox+6, oy+oh*0.12, ow-12, oh*0.18);
+  });
+}
+
+/* ----------------------- منطق برخورد و آپدیت ----------------------- */
+function rectIntersect(ax,ay,aw,ah,bx,by,bw,bh){
+  return !(bx > ax+aw || bx+bw < ax || by > ay+ah || by+bh < ay);
+}
+function update(dt){
+  if(gameOver) return;
+  elapsed = Math.floor((performance.now()-startTime)/1000);
+  // حرکت افقی با کلید یا شیب (tilt) یا لمسی
+  player.x += player.speedX;
+  // clamping
+  const roadPad = 36;
+  player.x = Math.max(roadPad + 6, Math.min(W - roadPad - player.w - 6, player.x));
+
+  // کاهش سرعت افقی (درگ)
+  player.speedX *= 0.88;
+  if(Math.abs(player.speedX) < 0.02) player.speedX = 0;
+
+  // spawn مدیریت بر اساس spawnTimer و سرعت
+  spawnTimer -= dt;
+  const spawnEvery = Math.max(0.6, 1.2 - (score/200) - (speedMult-1)*0.15);
+  if(spawnTimer <= 0){
+    spawnObstacle(); spawnTimer = spawnEvery;
+  }
+
+  // حرکت موانع به سمت پایین و برخورد
+  for(let i=obstacles.length-1;i>=0;i--){
+    const o = obstacles[i];
+    o.y += (o.baseSpeed * (1 + (speedMult-1)*0.8) + speedMult*0.6) * dt * 60; // dt مقیاس شده
+    // اگر از پایین خارج شد — امتیاز
+    if(!o.passed && o.y > H + 30){
+      o.passed = true;
+      score += 10;
+      passSfx.play().catch(()=>{});
+      // افزایش تدریجی سرعت
+      speedMult = 1 + Math.min(2.6, score/160);
+      updateUI();
+      obstacles.splice(i,1);
+      continue;
+    }
+    // برخورد با بازیکن با درنظر گرفتن عمق/مقیاس
+    const depth = 1 + (o.y / H) * 0.9;
+    const ow = o.w * depth;
+    const oh = o.h * depth;
+    const ox = o.x - (ow - o.w)/2;
+    const oy = o.y - (oh - o.h)/2;
+    if(rectIntersect(player.x, player.y, player.w, player.h, ox, oy, ow, oh) && player.invuln <= 0){
+      // برخورد — پایان بازی
+      crashSfx.play().catch(()=>{});
+      gameOver = true;
+      bgMusic.pause();
+      // فلَش ویزوال
+      flashRed();
+    }
+  }
+  // اگر کاربر کلیدها را گرفته، سرعت افقی اعمال شود
+  if(keys.left) player.speedX = Math.max(player.speedX - 0.9, -player.maxSpeedX);
+  if(keys.right) player.speedX = Math.min(player.speedX + 0.9, player.maxSpeedX);
+
+  // invuln timer
+  if(player.invuln > 0) player.invuln -= dt*60;
+  updateUI();
+}
+
+/* ----------------------- افکت فلَش هنگام برخورد ----------------------- */
+let flashAlpha = 0;
+function flashRed(){
+  flashAlpha = 0.9;
+  const t = setInterval(()=>{
+    flashAlpha -= 0.06;
+    if(flashAlpha <= 0){ flashAlpha = 0; clearInterval(t); }
+  }, 40);
+}
+
+/* ----------------------- رسم کامل هر فریم ----------------------- */
+function render(){
+  // clear
+  ctx.clearRect(0,0,W,H);
+  // dynamic sky/gradient
+  const g = ctx.createLinearGradient(0,0,0,H);
+  const hue = 200 + Math.sin(performance.now()*0.0006)*10;
+  g.addColorStop(0, `hsl(${hue}, 50%, 7%)`);
+  g.addColorStop(1, `hsl(${hue+10}, 40%, 3%)`);
+  ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+
+  drawRoad();
+  drawObstacles();
+  drawPlayer();
+
+  // flash overlay on crash
+  if(flashAlpha > 0){
+    ctx.fillStyle = `rgba(255,40,40,${flashAlpha})`;
+    ctx.fillRect(0,0,W,H);
+  }
+
+  // game over overlay
+  if(gameOver){
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0,0,W,H);
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 20px Tahoma';
+    ctx.fillText('💥 تصادف شد! بازی تمام شد', W/2, H/2 - 6);
+    ctx.font = '16px Tahoma';
+    ctx.fillText(`نمره: ${score}`, W/2, H/2 + 22);
+    ctx.restore();
+  }
+}
+
+/* ----------------------- حلقه بازی ----------------------- */
+function loop(now){
+  const dt = Math.min(0.05, (now - lastFrame)/1000);
+  lastFrame = now;
+  update(dt);
+  render();
+  requestAnimationFrame(loop);
+}
+
+/* ----------------------- UI و مدیریت رکورد (localStorage) ----------------------- */
+function updateUI(){
+  scoreEl.textContent = score;
+  speedEl.textContent = speedMult.toFixed(2);
+  timeEl.textContent = elapsed + 's';
+}
+
+function loadLeaderboard(){
+  const raw = localStorage.getItem('cg_leaderboard_v1');
+  return raw ? JSON.parse(raw) : [];
+}
+function saveLeaderboard(list){
+  localStorage.setItem('cg_leaderboard_v1', JSON.stringify(list));
+}
+function openLB(){
+  const list = loadLeaderboard();
+  lbList.innerHTML = '';
+  if(list.length === 0){ lbList.innerHTML = '<div class="small" style="padding:8px">هنوز رکوردی ثبت نشده</div>'; }
+  list.slice(0,20).forEach((r,i)=>{
+    const row = document.createElement('div'); row.className='lb-row';
+    row.innerHTML = `<div>#${i+1} ${escapeHtml(r.name)}</div><div>${r.score} pts</div>`;
+    lbList.appendChild(row);
+  });
+  lbModal.style.display = 'block';
+  lbModal.setAttribute('aria-hidden','false');
+}
+function closeLBFunc(){
+  lbModal.style.display='none'; lbModal.setAttribute('aria-hidden','true');
+}
+function clearLBFunc(){ localStorage.removeItem('cg_leaderboard_v1'); openLB(); }
+
+/* ذخیره نمره */
+function saveMyScore(){
+  const name = (playerNameInput.value || 'ناشناس').trim().slice(0,20);
+  const list = loadLeaderboard();
+  list.push({name,score,ts:Date.now()});
+  // مرتب‌سازی نزولی
+  list.sort((a,b)=>b.score-a.score);
+  // محدودیت تعداد
+  saveLeaderboard(list.slice(0,50));
+  playerNameInput.value = '';
+  openLB();
+}
+
+/* ----------------------- ورودی‌ها: کیبورد، لمسی، شتاب‌سنج ----------------------- */
+window.addEventListener('keydown', e=>{
+  if(e.key === 'ArrowLeft') keys.left = true;
+  if(e.key === 'ArrowRight') keys.right = true;
+  if(e.key === ' ' && gameOver) restart();
+});
+window.addEventListener('keyup', e=>{
+  if(e.key === 'ArrowLeft') keys.left = false;
+  if(e.key === 'ArrowRight') keys.right = false;
+});
+
+/* لمسی دکمه‌ها */
+leftBtn.addEventListener('touchstart', e=>{ e.preventDefault(); keys.left=true; });
+leftBtn.addEventListener('touchend', e=>{ e.preventDefault(); keys.left=false; });
+rightBtn.addEventListener('touchstart', e=>{ e.preventDefault(); keys.right=true; });
+rightBtn.addEventListener('touchend', e=>{ e.preventDefault(); keys.right=false; });
+
+/* نمایش کنترل‌های لمسی اگر صفحه لمسی باشد */
+function setupTouchControls(){
+  const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  if(isTouch){ touchControls.style.display='flex'; }
+}
+
+/* شتاب‌سنج (DeviceOrientation) — در بعضی مرورگرها نیاز به درخواست مجوز است */
+function setupTilt(){
+  if(typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
+    // iOS 13+ method: باید درخواست شود
+    const btn = document.createElement('button');
+    btn.textContent = '💠 فعال‌سازی Tilt';
+    btn.className='btn';
+    btn.style.position='absolute'; btn.style.left='50%'; btn.style.transform='translateX(-50%)'; btn.style.bottom='14px';
+    document.querySelector('.wrap').appendChild(btn);
+    btn.addEventListener('click', ()=> {
+      DeviceOrientationEvent.requestPermission().then(resp=>{
+        if(resp === 'granted'){ window.addEventListener('deviceorientation', onTilt); btn.remove(); tiltAvailable=true; }
+      }).catch(()=>{ alert('مجوز شتاب‌سنج داده نشد'); btn.remove(); });
+    });
+  } else {
+    // non-iOS
+    window.addEventListener('deviceorientation', onTilt);
+    tiltAvailable = true;
+  }
+}
+function onTilt(e){
+  // gamma : left-right tilt در درجه
+  const g = e.gamma || 0;
+  // map gamma (-40..40) to speedX
+  const maxTilt = 30;
+  const norm = Math.max(-maxTilt, Math.min(maxTilt, g)) / maxTilt;
+  player.speedX += norm * 0.6; // تقویت کمی
+  // limit
+  player.speedX = Math.max(-player.maxSpeedX*1.2, Math.min(player.maxSpeedX*1.2, player.speedX));
+}
+
+/* ----------------------- کنترل دکمه‌ها و تعاملات ----------------------- */
+restartBtn.addEventListener('click', ()=>{ restart(); bgMusic.play().catch(()=>{}); });
+playMusicBtn.addEventListener('click', ()=>{
+  if(bgMusic.paused){ bgMusic.play().catch(()=>{}); playMusicBtn.textContent='⏸ مکث موسیقی'; }
+  else { bgMusic.pause(); playMusicBtn.textContent='▶︎ پخش موسیقی'; }
+});
+muteBtn.addEventListener('click', ()=>{
+  isMuted = !isMuted;
+  [bgMusic,crashSfx,passSfx].forEach(a=>a.muted = isMuted);
+  muteBtn.textContent = isMuted ? '🔈 بی‌صدا' : '🔊';
+  muteBtn.classList.toggle('muted', isMuted);
+});
+
+showLB.addEventListener('click', openLB);
+closeLB.addEventListener('click', closeLBFunc);
+clearLB.addEventListener('click', clearLBFunc);
+saveScoreBtn.addEventListener('click', saveMyScore);
+
+/* تابع restart */
+function restart(){
+  obstacles = [];
+  init();
+  lastFrame = performance.now();
+  if(gameOver) gameOver = false;
+  // شتاب‌سنج دوباره فعال
+  setupTilt();
+}
+
+/* ----------------------- کمک‌کننده‌ها ----------------------- */
+function roundRect(ctx,x,y,w,h,r,fill,stroke, fillStyle){
+  if(typeof r === 'undefined') r=6;
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+  if(fill){ ctx.fillStyle = fillStyle || '#999'; ctx.fill(); }
+  if(stroke){ ctx.stroke(); }
+}
+function escapeHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+/* ----------------------- شروع اولیه ----------------------- */
+setupTouchControls();
+init();
+lastFrame = performance.now();
+requestAnimationFrame(loop);
+
+/* اضافه: اگر کاربر برنده شد (نمره بالا)، نمایش بصری یا ذخیره اتوماتیک — اینجا ساده نگه داشتیم */
+
+/* ----------------------- اجرای اولیه کنترل Tilt (اجازه ممکن) ----------------------- */
+setupTilt();
+
+</script>
+</body>
+</html>
