@@ -1,87 +1,4 @@
-<!DOCTYPE html>
-<html lang="fa">
-<head>
-<meta charset="UTF-8">
-<title>بازی حدس عدد خفن 🎯</title>
-<style>
-    body {
-        font-family: 'Tahoma', sans-serif;
-        background: linear-gradient(45deg, #ffecd2, #fcb69f);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: 100vh;
-        margin: 0;
-        flex-direction: column;
-        text-align: center;
-        transition: background 2s linear;
-        overflow: hidden;
-    }
-    h1 {
-        font-size: 3em;
-        color: #ff6f61;
-        text-shadow: 2px 2px #fff;
-        margin-bottom: 20px;
-    }
-    input[type=number] {
-        padding: 10px;
-        font-size: 1.2em;
-        border-radius: 10px;
-        border: 2px solid #ff6f61;
-        width: 100px;
-        text-align: center;
-        transition: transform 0.2s;
-    }
-    button {
-        padding: 10px 20px;
-        font-size: 1.2em;
-        margin-left: 10px;
-        border-radius: 10px;
-        border: none;
-        background-color: #ff6f61;
-        color: white;
-        cursor: pointer;
-        transition: transform 0.2s, background 0.3s;
-    }
-    button:hover {
-        transform: scale(1.1);
-        background-color: #ff3b2e;
-    }
-    p {
-        font-size: 1.5em;
-        margin-top: 20px;
-        color: #333;
-        min-height: 30px;
-        transition: all 0.3s ease;
-    }
-    .success {
-        color: green;
-        font-weight: bold;
-        animation: pop 0.5s ease;
-    }
-    .shake {
-        animation: shake 0.3s;
-    }
-    @keyframes pop {
-        0% { transform: scale(0.5); }
-        100% { transform: scale(1); }
-    }
-    @keyframes shake {
-        0% { transform: translateX(0); }
-        25% { transform: translateX(-10px); }
-        50% { transform: translateX(10px); }
-        75% { transform: translateX(-10px); }
-        100% { transform: translateX(0); }
-    }
-    canvas {
-        position: absolute;
-        top: 0;
-        left: 0;
-        pointer-events: none;
-    }
-</style>
-</head>
-<body>
+
 
 <h1>🎯 بازی حدس عدد خفن</h1>
 <p>یک عدد بین 1 تا 100 حدس بزن:</p>
@@ -209,4 +126,5 @@
 </script>
 
 </body>
+
 </html>
